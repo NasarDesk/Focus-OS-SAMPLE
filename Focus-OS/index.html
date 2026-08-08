@@ -1,0 +1,715 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus OS â€” Productivity Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<div id="app">
+  <div id="globalSearch"><input id="globalSearchInput" type="search" placeholder="Search Focus OS (S)" autocomplete="off" oninput="renderGlobalSearch(this.value)" onkeydown="if(event.key==='Escape')closeGlobalSearch()"><div id="globalSearchResults" style="display:none;"></div></div>
+  <div id="sidebar">
+    <div class="brand"><span class="dot"></span>Focus OS</div>
+    <div id="navList"></div>
+    <div class="sidebar-bottom">
+      <div class="row"><span id="userName">Student</span><button id="themeBtn" onclick="toggleTheme()">ðŸŒ™</button></div>
+      <div class="row"><span>Version</span><span id="sidebarVersion">1.2.0</span></div>
+      <div class="row"><span>Storage</span><span id="syncStatus">Saved âœ“</span></div>
+    </div>
+  </div>
+
+  <div id="main">
+
+    <!-- DASHBOARD -->
+    <div class="page" id="page-dashboard">
+      <h1 class="page-title">Dashboard</h1>
+      <div class="card" id="agendaBanner" style="display:none;margin-bottom:14px;border-left:3px solid var(--accent);"></div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>ðŸ’­ Daily Thoughts</h3>
+        <div id="dashDailyThought" class="task-meta" style="font-style:italic;line-height:1.5;"></div>
+      </div>
+      <div class="grid grid-4" style="margin-bottom:14px;">
+        <div class="card"><h3>Focus Today</h3><div class="stat-num" id="d-focusToday">0m</div><div class="stat-sub" id="d-goalProgress">of goal</div></div>
+        <div class="card"><h3>Productive Streak</h3><div class="stat-num" id="d-streak">0 days</div><div class="stat-sub" id="d-habitStreakSub">Habit streak: 0d</div></div>
+        <div class="card"><h3>Tasks Due Today</h3><div class="stat-num" id="d-tasksToday">0</div><div class="stat-sub">Open tasks</div></div>
+        <div class="card"><h3>Productivity Score</h3><div class="stat-num" id="d-prodScore">0</div><div class="stat-sub">out of 100</div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>Weekly Focus</h3>
+        <div class="chart-wrap"><canvas id="chartWeekly"></canvas></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>Habits Today</h3>
+          <div id="d-habitsToday"></div>
+        </div>
+        <div class="card">
+          <h3>Upcoming Tasks</h3>
+          <div id="d-upcoming"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>Quick Notes</h3>
+        <textarea id="quickNotes" rows="3" style="width:100%;" placeholder="Jot something down..."></textarea>
+      </div>
+    </div>
+
+    <!-- TODAY -->
+    <div class="page" id="page-today">
+      <h1 class="page-title">Today</h1>
+      <div class="grid grid-4" style="margin-bottom:16px;">
+        <div class="card"><h3>Estimated Time</h3><div class="stat-num" id="t-estimated">0m</div></div>
+        <div class="card"><h3>Tasks to Complete</h3><div class="stat-num" id="t-count">0</div></div>
+        <div class="card"><h3>Elapsed Time</h3><div class="stat-num" id="t-elapsed">0m</div></div>
+        <div class="card"><h3>Completed</h3><div class="stat-num" id="t-completed">0</div></div>
+      </div>
+      <div id="today-list"></div>
+    </div>
+
+    <!-- POMODORO -->
+    <div class="page" id="page-pomodoro">
+      <h1 class="page-title">Pomodoro</h1>
+      <div class="pomo-wrap">
+        <div class="pomo-center">
+          <div id="timerMode">Focus Session</div>
+          <div class="subtle" id="pomoSelectedTask">Please select a taskâ€¦</div>
+          <div class="timer-ring">
+            <svg width="200" height="200"><circle id="ringBg" cx="100" cy="100" r="92" fill="none" stroke="var(--bg3)" stroke-width="8"/><circle id="ringFg" cx="100" cy="100" r="92" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round" transform="rotate(-90 100 100)"/></svg>
+            <div id="timerDisplay">0:25</div>
+          </div>
+          <div class="pomo-controls">
+            <button class="btn btn-primary" id="btnStart" onclick="pomoStart()">â–¶ Start</button>
+            <button class="btn" id="btnPause" onclick="pomoPause()" style="display:none;">â¸ Pause</button>
+            <button class="btn" id="btnResume" onclick="pomoResume()" style="display:none;">â–¶ Resume</button>
+            <button class="btn btn-danger" id="btnStop" onclick="pomoStop()" style="display:none;">â¹ Stop</button>
+            <button class="btn" onclick="pomoSkip()">â­ Skip</button>
+            <button class="btn" onclick="pomoReset()">â†º Reset</button>
+          </div>
+        </div>
+        <div class="pomo-side">
+          <div class="card">
+            <h3>Quick Settings</h3>
+            <div class="field-row">
+              <div class="field"><label>Focus (min)</label><input type="number" id="qs-focus" min="1" onchange="syncHoursMinsFromTotal('qs-focus','qs-focus-h','qs-focus-m');updateQuickSettings()"></div>
+              <div class="field"><label>Short (min)</label><input type="number" id="qs-short" min="1" onchange="syncHoursMinsFromTotal('qs-short','qs-short-h','qs-short-m');updateQuickSettings()"></div>
+              <div class="field"><label>Long (min)</label><input type="number" id="qs-long" min="1" onchange="syncHoursMinsFromTotal('qs-long','qs-long-h','qs-long-m');updateQuickSettings()"></div>
+            </div>
+            <div class="subtle" style="margin:-4px 0 6px;">...or set as Hour : Minute</div>
+            <div class="field-row">
+              <div class="field">
+                <label>Focus</label>
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <input type="number" id="qs-focus-h" min="0" placeholder="H" style="width:100%;" onchange="syncTotalFromHoursMins('qs-focus','qs-focus-h','qs-focus-m');updateQuickSettings()">
+                  <span>:</span>
+                  <input type="number" id="qs-focus-m" min="0" max="59" placeholder="M" style="width:100%;" onchange="syncTotalFromHoursMins('qs-focus','qs-focus-h','qs-focus-m');updateQuickSettings()">
+                </div>
+              </div>
+              <div class="field">
+                <label>Short</label>
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <input type="number" id="qs-short-h" min="0" placeholder="H" style="width:100%;" onchange="syncTotalFromHoursMins('qs-short','qs-short-h','qs-short-m');updateQuickSettings()">
+                  <span>:</span>
+                  <input type="number" id="qs-short-m" min="0" max="59" placeholder="M" style="width:100%;" onchange="syncTotalFromHoursMins('qs-short','qs-short-h','qs-short-m');updateQuickSettings()">
+                </div>
+              </div>
+              <div class="field">
+                <label>Long</label>
+                <div style="display:flex;gap:4px;align-items:center;">
+                  <input type="number" id="qs-long-h" min="0" placeholder="H" style="width:100%;" onchange="syncTotalFromHoursMins('qs-long','qs-long-h','qs-long-m');updateQuickSettings()">
+                  <span>:</span>
+                  <input type="number" id="qs-long-m" min="0" max="59" placeholder="M" style="width:100%;" onchange="syncTotalFromHoursMins('qs-long','qs-long-h','qs-long-m');updateQuickSettings()">
+                </div>
+              </div>
+            </div>
+            <div class="field"><label>Sessions before long break</label><input type="number" id="qs-sessions" min="1" onchange="updateQuickSettings()"></div>
+            <div class="field"><label><input type="checkbox" id="qs-autobreak" style="width:auto;" onchange="updateQuickSettings()"> Auto-start breaks</label></div>
+            <div class="field"><label><input type="checkbox" id="qs-autonext" style="width:auto;" onchange="updateQuickSettings()"> Auto-start next session</label></div>
+          </div>
+          <div class="card">
+            <h3>Select a Task</h3>
+            <div id="pomoTaskList"></div>
+          </div>
+          <div class="card">
+            <h3>ðŸ’­ Daily Thoughts</h3>
+            <div id="pomoDailyThought" class="task-meta" style="font-style:italic;line-height:1.5;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="two-col" style="margin-top:20px;">
+        <div class="card">
+          <h3>Today's Progress</h3>
+          <div id="pomoTodayProgress"></div>
+        </div>
+        <div class="card">
+          <h3>Today's Sessions</h3>
+          <div id="pomoSessions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TASKS -->
+    <div class="page" id="page-tasks">
+      <h1 class="page-title">Tasks</h1>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="openTaskModal()">+ New Task</button>
+        <button class="btn" onclick="openLogModal('task')">ðŸ•’ Log Time (no timer)</button>
+      </div>
+      <div class="tabs" id="taskFilterTabs">
+        <div class="tab active" data-f="all" onclick="setTaskFilter('all')">All</div>
+        <div class="tab" data-f="active" onclick="setTaskFilter('active')">Active</div>
+        <div class="tab" data-f="completed" onclick="setTaskFilter('completed')">Completed</div>
+        <div class="tab" data-f="overdue" onclick="setTaskFilter('overdue')">Overdue</div>
+      </div>
+      <div id="tasks-list"></div>
+    </div>
+
+    <!-- STUDY PLANNER -->
+    <div class="page" id="page-studyplanner">
+      <h1 class="page-title">Study Planner</h1>
+      <div id="sp-overview">
+        <p class="subtle" style="margin-top:-8px;">Track syllabus progress, chapters, PDFs, and notes per subject.</p>
+        <div class="grid grid-3" id="sp-subject-grid"></div>
+      </div>
+      <div id="sp-workspace" style="display:none;margin-top:6px;">
+        <button class="btn btn-sm" onclick="closeSubjectWorkspace()">â† Back to Subjects</button>
+        <div id="sp-workspace-body"></div>
+      </div>
+    </div>
+
+    <!-- PLANNING -->
+    <div class="page" id="page-planning">
+      <h1 class="page-title">Planning</h1>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div class="tabs" id="planTabs" style="margin-bottom:0;">
+          <div class="tab active" data-v="agenda" onclick="setPlanView('agenda')">Agenda</div>
+          <div class="tab" data-v="day" onclick="setPlanView('day')">Day</div>
+          <div class="tab" data-v="week" onclick="setPlanView('week')">Week</div>
+          <div class="tab" data-v="month" onclick="setPlanView('month')">Month</div>
+          <div class="tab" data-v="exams" onclick="setPlanView('exams')">Exams</div>
+        </div>
+        <select id="planFilterType" onchange="renderPlanning()" style="font-size:12px;">
+          <option value="all">All Types</option>
+          <option value="task">Task</option>
+          <option value="study">Study</option>
+          <option value="revision">Revision</option>
+          <option value="pomodoro">Pomodoro</option>
+          <option value="habit">Habit</option>
+          <option value="exam">Exam</option>
+          <option value="other">Other</option>
+        </select>
+        <div id="planNavControls" style="display:flex;align-items:center;gap:10px;">
+          <button class="btn btn-sm" onclick="planShift(-1)">â€¹</button>
+          <div id="planLabel" style="font-weight:600;min-width:140px;text-align:center;"></div>
+          <button class="btn btn-sm" onclick="planShift(1)">â€º</button>
+          <button class="btn btn-primary btn-sm" onclick="openEventModal()">+ New Event</button>
+        </div>
+      </div>
+      <div id="planBody"></div>
+    </div>
+
+    <!-- JOURNAL -->
+    <div class="page" id="page-journal">
+      <h1 class="page-title">Journal</h1>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <button class="btn btn-sm" onclick="journalShift(-1)">â€¹</button>
+        <div id="journalLabel" style="font-weight:600;"></div>
+        <button class="btn btn-sm" onclick="journalShift(1)">â€º</button>
+        <button class="btn btn-sm" onclick="journalToday()">Today</button>
+      </div>
+      <div class="grid grid-4" style="margin-bottom:14px;">
+        <div class="card"><h3>Productive Time</h3><div class="stat-num" id="j-time">0m</div></div>
+        <div class="card"><h3>Productivity Score</h3><div class="stat-num" id="j-score">0</div></div>
+        <div class="card"><h3>Tasks Completed</h3><div class="stat-num" id="j-tasks">0</div></div>
+        <div class="card"><h3>Habits Completed</h3><div class="stat-num" id="j-habits">0</div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>Completed Tasks</h3>
+        <div id="j-taskList"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>Completed Habits</h3>
+        <div id="j-habitList"></div>
+      </div>
+      <div id="journalReflection" class="card" style="margin-bottom:14px;">
+        <h3>Daily Reflection</h3>
+        <div class="field"><label>Mood of the Day</label><select id="j-mood"><option value="">Not set</option><option value="great">ðŸ˜Š Great</option><option value="good">ðŸ™‚ Good</option><option value="normal">ðŸ˜ Normal</option><option value="bad">ðŸ˜ž Bad</option><option value="very_bad">ðŸ˜« Very Bad</option></select></div>
+        <div class="field"><label>What did I learn today?</label><textarea id="j-learned" rows="2"></textarea></div>
+        <div class="field"><label>What was the most difficult topic today?</label><textarea id="j-hardest" rows="2"></textarea></div>
+        <div class="field"><label>What should I improve tomorrow?</label><textarea id="j-improve" rows="2"></textarea></div>
+        <div class="field"><label>Tomorrow's Top Priorities</label><textarea id="j-priorities" rows="2"></textarea></div>
+        <div class="field"><label>Overall Productivity Rating: <span id="j-ratingVal">5</span>/10</label>
+          <div class="slider-row"><input type="range" min="1" max="10" id="j-rating" oninput="document.getElementById('j-ratingVal').textContent=this.value"></div>
+        </div>
+        <div class="field"><label>Daily Notes</label><textarea id="j-notes" rows="5"></textarea></div>
+        <button class="btn btn-primary btn-sm" onclick="saveJournalEntry()">Save Entry</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteJournalEntry()">Delete Entry</button>
+      </div>
+    </div>
+
+    <!-- HABITS -->
+    <div class="page" id="page-habits">
+      <h1 class="page-title">Habits</h1>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <button class="btn btn-primary" onclick="openHabitModal()">+ New Habit</button>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <button class="btn btn-sm" onclick="habitTrackerShift(-1)">â€¹</button>
+          <div id="habitTrackerLabel" style="font-weight:600;"></div>
+          <button class="btn btn-sm" onclick="habitTrackerShift(1)">â€º</button>
+          <button class="btn btn-sm" onclick="habitTrackerToday()">This Month</button>
+        </div>
+        <h3>Completion Habits</h3>
+        <div id="ht-completionGrid"></div>
+        <h3 style="margin-top:18px;">Hours Tracker</h3>
+        <p class="subtle" style="margin-top:-6px;">Time-based habits â€” click a cell to log hours/minutes for that day.</p>
+        <div id="ht-timeGrid"></div>
+      </div>
+      <h1 class="page-title" style="font-size:16px;">Manage Habits</h1>
+      <div id="habits-list"></div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="page" id="page-calendar">
+      <h1 class="page-title">Calendar</h1>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+        <button class="btn btn-sm" onclick="calShift(-1)">â€¹</button>
+        <div id="calLabel" style="font-weight:600;"></div>
+        <button class="btn btn-sm" onclick="calShift(1)">â€º</button>
+      </div>
+      <div class="cal-grid" id="calHead"></div>
+      <div class="cal-grid" id="calBody" style="margin-top:6px;"></div>
+    </div>
+
+    <!-- REPORTS -->
+    <div class="page" id="page-reports">
+      <h1 class="page-title">Reports</h1>
+
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <div class="field" style="max-width:260px;margin-bottom:0;">
+          <label>Subject / Category Filter</label>
+          <select id="reportSubjectFilter" onchange="renderReports()">
+            <option value="all">All Subjects / Categories</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- GOAL PROGRESS -->
+      <div class="card" style="margin-bottom:14px;">
+        <h3>Goal Progress</h3>
+        <div class="grid grid-2">
+          <div>
+            <div class="task-meta" style="margin-bottom:4px;"><span>Daily Focus Goal</span><span id="goal-daily-label">0m / 0m</span></div>
+            <div class="progress-bar" style="height:8px;"><div class="progress-fill" id="goal-daily-bar" style="width:0%;"></div></div>
+          </div>
+          <div>
+            <div class="task-meta" style="margin-bottom:4px;"><span>Monthly Focus Goal</span><span id="goal-monthly-label">0h / 0h</span></div>
+            <div class="progress-bar" style="height:8px;"><div class="progress-fill" id="goal-monthly-bar" style="width:0%;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIFETIME OVERVIEW -->
+      <div class="grid grid-4" style="margin-bottom:8px;">
+        <div class="card"><h3>Lifetime Focus</h3><div class="stat-num" id="s-totalFocus">0h</div></div>
+        <div class="card"><h3>Lifetime Sessions</h3><div class="stat-num" id="s-totalSessions">0</div></div>
+        <div class="card"><h3>Tasks Completed</h3><div class="stat-num" id="s-totalTasks">0</div></div>
+        <div class="card"><h3>Longest Habit Streak</h3><div class="stat-num" id="s-longestStreak">0</div></div>
+      </div>
+      <div class="grid grid-4" style="margin-bottom:14px;">
+        <div class="card"><h3>Best Day (avg focus)</h3><div class="stat-num" id="s-bestDay">â€”</div></div>
+        <div class="card"><h3>Focus Score</h3><div class="stat-num" id="s-focusScore">0</div></div>
+        <div class="card"><h3>Consistency Score</h3><div class="stat-num" id="s-consistency">0</div></div>
+        <div class="card"><h3>Study Streak</h3><div class="stat-num" id="s-studyStreak">0 days</div></div>
+      </div>
+
+      <!-- RANGE-BASED REPORTS -->
+      <div class="tabs" id="reportTabs">
+        <div class="tab active" data-m="day" onclick="setReportMode('day')">Day</div>
+        <div class="tab" data-m="week" onclick="setReportMode('week')">Week</div>
+        <div class="tab" data-m="month" onclick="setReportMode('month')">Month</div>
+        <div class="tab" data-m="year" onclick="setReportMode('year')">Year</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="reportShift(-1)">â€¹ Previous</button>
+        <div id="reportRangeLabel" style="font-weight:600;min-width:160px;"></div>
+        <button class="btn btn-sm" onclick="reportShift(1)">Next â€º</button>
+        <button class="btn btn-sm" onclick="reportJumpToday()">Today</button>
+        <select id="reportMonthSelect" style="display:none;" onchange="jumpToMonth(this.value)"></select>
+        <select id="reportYearSelect" style="display:none;" onchange="jumpToYear(this.value)"></select>
+        <button class="btn btn-sm" id="reportExportBtn" style="display:none;margin-left:auto;" onclick="exportMonthlyReportPDF()">ðŸ“„ Export Monthly Report (PDF)</button>
+      </div>
+      <div id="reportWeekDays" style="display:none;margin-bottom:14px;"></div>
+      <div class="grid grid-4" style="margin-bottom:14px;">
+        <div class="card"><h3>Total Focus Time</h3><div class="stat-num" id="r-focus">0m</div></div>
+        <div class="card"><h3>Sessions</h3><div class="stat-num" id="r-sessions">0</div></div>
+        <div class="card"><h3>Tasks Completed</h3><div class="stat-num" id="r-tasks">0</div></div>
+        <div class="card"><h3>Habits Completed</h3><div class="stat-num" id="r-habits">0</div></div>
+      </div>
+      <div class="two-col" style="margin-bottom:14px;">
+        <div class="card"><h3>Focus by Day</h3><div class="chart-wrap"><canvas id="chartReportBar"></canvas></div></div>
+        <div class="card"><h3>Time by Subject / Category</h3><div class="chart-wrap"><canvas id="chartReportPie"></canvas></div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>Productivity Insights</h3>
+        <div id="insights"></div>
+      </div>
+
+      <!-- LONG-HORIZON VIEWS -->
+      <div class="card" style="margin-bottom:14px;">
+        <h3>Monthly Trend</h3>
+        <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Yearly Activity</h3>
+        <div class="subtle" id="ya-stats" style="margin-bottom:8px;"></div>
+        <div class="tabs" id="yaTabs" style="margin-bottom:10px;">
+          <div class="tab active" data-v="monthly" onclick="setYearActivityView('monthly')">Monthly</div>
+          <div class="tab" data-v="yearly" onclick="setYearActivityView('yearly')">Yearly</div>
+        </div>
+        <div id="ya-heatmap" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+
+    <!-- ACHIEVEMENTS -->
+    <div class="page" id="page-achievements">
+      <h1 class="page-title">Achievements</h1>
+      <div class="card" style="margin-bottom:16px;">
+        <h3>Level <span id="ach-level">1</span></h3>
+        <div class="progress-bar" style="height:8px;"><div class="progress-fill" id="ach-xpbar" style="width:0%;"></div></div>
+        <div class="stat-sub" id="ach-xptext" style="margin-top:6px;"></div>
+      </div>
+      <div class="grid grid-4" id="ach-grid"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <h1 class="page-title">Settings</h1>
+      <div class="settings-section">General</div>
+      <div class="card" style="margin-bottom:14px;max-width:560px;"><h3>Application</h3><div class="subtle">Focus OS keeps your data in this browser. Use Backup &amp; Restore regularly to keep a recoverable copy.</div></div>
+      <div class="settings-section">Appearance</div>
+      <div class="card" style="margin-bottom:14px;max-width:560px;"><h3>Theme</h3><button class="btn btn-sm" onclick="toggleTheme()">Toggle light / dark theme</button></div>
+      <div class="settings-section">Pomodoro</div>
+      <div class="card" style="margin-bottom:14px;max-width:520px;">
+        <h3>Pomodoro Durations (minutes)</h3>
+        <div class="field-row">
+          <div class="field"><label>Focus</label><input type="number" id="set-focus" min="1"></div>
+          <div class="field"><label>Short Break</label><input type="number" id="set-short" min="1"></div>
+          <div class="field"><label>Long Break</label><input type="number" id="set-long" min="1"></div>
+        </div>
+        <div class="field"><label>Sessions before long break</label><input type="number" id="set-sessions" min="1"></div>
+        <div class="field"><label><input type="checkbox" id="set-autobreak" style="width:auto;"> Auto-start breaks</label></div>
+        <div class="field"><label><input type="checkbox" id="set-autonext" style="width:auto;"> Auto-start next focus session</label></div>
+      </div>
+      <div class="settings-section">Planning</div>
+      <div class="card" style="margin-bottom:14px;max-width:520px;">
+        <h3>Daily Goals</h3>
+        <div class="field-row">
+          <div class="field"><label>Daily Focus Goal (minutes)</label><input type="number" id="set-goalfocus" min="0"></div>
+          <div class="field"><label>Daily Sessions Goal</label><input type="number" id="set-goalsessions" min="0"></div>
+        </div>
+      </div>
+      <div class="settings-section">Keyboard Shortcuts</div>
+      <div class="card" style="margin-bottom:14px;max-width:560px;">
+        <h3>Keyboard Shortcuts</h3>
+        <p class="subtle" style="margin-top:-6px;">Use a single key when you are not typing in a field. Duplicate shortcuts are not allowed.</p>
+        <div id="shortcutSettings"></div>
+      </div>
+      <div class="settings-section">Notifications</div>
+      <div class="card" style="margin-bottom:14px;max-width:560px;"><h3>Reminders</h3><p class="subtle" style="margin-top:-6px;">Allow browser notifications for scheduled planner reminders.</p><button class="btn btn-sm" onclick="requestNotificationPermission()">Enable notifications</button></div>
+      <div class="settings-section">Backup &amp; Restore / Import &amp; Export</div>
+      <div class="card" style="margin-bottom:14px;max-width:560px;">
+        <h3>Backup & Restore</h3>
+        <p class="subtle" style="margin-top:-6px;">Export a complete backup of everything in this app â€” tasks, habits, Study Planner (subjects, chapters, PDFs, PYQs, notes), planner events, journal, exams, achievements, and settings. Keep these files safe; they're the only way to recover your data if this browser's storage is ever cleared, and they're designed to carry forward into a future cloud-synced version of StudentOS.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <button class="btn btn-primary" onclick="exportData('json')">â¬‡ Export Backup</button>
+          <label class="btn" style="display:inline-block;">â¬† Import Backup<input type="file" accept=".json,application/json" id="importFile" style="display:none;" onchange="importData(event)"></label>
+          <button class="btn" onclick="exportData('csv')">Export CSV (sessions only)</button>
+        </div>
+        <div id="backupLastInfo" class="stat-sub"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;max-width:560px;">
+        <h3>Danger Zone</h3>
+        <button class="btn btn-danger" onclick="showConfirm('Erase all data? This cannot be undone. Export a backup first if you want to keep anything.', resetAllData)">Reset All Data</button>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettingsForm()">Save Settings</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Task Modal -->
+<div class="overlay" id="taskModal">
+  <div class="modal">
+    <h2 id="taskModalTitle">New Task</h2>
+    <input type="hidden" id="tk-id">
+    <div class="field"><label>Task Name</label><input id="tk-name" placeholder="e.g. Learn Python"></div>
+    <div class="field"><label>Description</label><textarea id="tk-desc" rows="2"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Project</label><input id="tk-project" placeholder="Tasks"></div>
+      <div class="field"><label>Category / Subject</label>
+        <select id="tk-category" onchange="handleCategoryChange(this)">
+          <optgroup label="Subjects">
+            <option>Science 1</option><option>Science 2</option><option>Math 1</option><option>Math 2</option>
+            <option>English</option><option>Marathi</option><option>Hindi</option><option>History</option><option>Geography</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option>Coding</option><option>Reading</option><option>Work</option><option>Personal</option><option>Completion</option><option>Assignment</option><option>Other</option>
+          </optgroup>
+          <optgroup label="Custom" id="tk-category-custom"></optgroup>
+          <option value="__add_new__">+ Add new category...</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Priority</label><select id="tk-priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+      <div class="field"><label>Deadline</label><input type="date" id="tk-deadline"></div>
+    </div>
+    <div class="field"><label>Required Focus Time (minutes) â€” auto-completes when reached</label><input type="number" id="tk-required" min="0" placeholder="e.g. 180" onchange="syncHoursMinsFromTotal('tk-required','tk-required-h','tk-required-m')"></div>
+    <div class="field-row" style="margin-top:-6px;">
+      <div class="field"><label>...or Hours</label><input type="number" id="tk-required-h" min="0" placeholder="0" onchange="syncTotalFromHoursMins('tk-required','tk-required-h','tk-required-m')"></div>
+      <div class="field"><label>Minutes</label><input type="number" id="tk-required-m" min="0" max="59" placeholder="0" onchange="syncTotalFromHoursMins('tk-required','tk-required-h','tk-required-m')"></div>
+    </div>
+    <div class="field"><label>Tags (comma separated)</label><input id="tk-tags"></div>
+    <div class="field"><label>Notes</label><textarea id="tk-notes" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('taskModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTask()">Save Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Category Modal -->
+<div class="overlay" id="addCategoryModal">
+  <div class="modal" style="width:360px;">
+    <h2>New Category</h2>
+    <p class="subtle" style="margin-top:-8px;">Add your own category to organize tasks (e.g. Coding, Extracurricular). This is separate from the fixed Study Planner subjects, which have their own chapter tracking.</p>
+    <div class="field"><label>Category Name</label><input id="new-category-name" placeholder="e.g. Extracurricular"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('addCategoryModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewCategory()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Habit Modal -->
+<div class="overlay" id="habitModal">
+  <div class="modal">
+    <h2>New Habit</h2>
+    <input type="hidden" id="hb-id">
+    <div class="field"><label>Habit Name</label><input id="hb-name" placeholder="e.g. Read 20 pages"></div>
+    <div class="field-row">
+      <div class="field"><label>Category</label><select id="hb-category"><option>Study</option><option>Workout</option><option>Reading</option><option>Meditation</option><option>Quran</option><option>Water</option><option>Sleep</option><option>Coding</option><option>Exercise</option><option>Custom</option></select></div>
+      <div class="field"><label>Frequency</label><select id="hb-frequency"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></div>
+    </div>
+    <div class="field">
+      <label>Tracking Type (a habit can use both)</label>
+      <label style="display:block;font-size:13px;margin-bottom:6px;"><input type="checkbox" id="hb-track-completion" style="width:auto;" checked> Completion (mark done/not done)</label>
+      <label style="display:block;font-size:13px;"><input type="checkbox" id="hb-track-time" style="width:auto;"> Time-based (log hours/minutes)</label>
+    </div>
+    <div class="field"><label>Color</label><input type="color" id="hb-color" value="#5b8cff"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('habitModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHabit()">Save Habit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Log Modal -->
+<div class="overlay" id="logModal">
+  <div class="modal">
+    <h2>Log Time Manually</h2>
+    <p class="subtle" style="margin-top:-8px;">For when you studied without a timer running (e.g. at school) â€” this still counts toward your task/habit and reports.</p>
+    <div class="field"><label>Log against</label>
+      <select id="logTargetType" onchange="renderLogTargetOptions()"><option value="task">Task</option><option value="habit">Habit</option></select>
+    </div>
+    <div class="field"><label>Select</label><select id="logTargetId"></select></div>
+    <div class="field-row">
+      <div class="field"><label>Duration (minutes)</label><input type="number" id="log-duration" min="1" value="30" onchange="syncHoursMinsFromTotal('log-duration','log-duration-h','log-duration-m')"></div>
+      <div class="field"><label>Date</label><input type="date" id="log-date"></div>
+    </div>
+    <div class="field-row" style="margin-top:-6px;">
+      <div class="field"><label>...or Hours</label><input type="number" id="log-duration-h" min="0" placeholder="0" onchange="syncTotalFromHoursMins('log-duration','log-duration-h','log-duration-m')"></div>
+      <div class="field"><label>Minutes</label><input type="number" id="log-duration-m" min="0" max="59" placeholder="0" onchange="syncTotalFromHoursMins('log-duration','log-duration-h','log-duration-m')"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('logModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveManualLog()">Add Log</button>
+    </div>
+  </div>
+</div>
+
+<!-- Chapter Modal -->
+<div class="overlay" id="chapterModal">
+  <div class="modal modal-wide">
+    <h2 id="chapterModalTitle">New Chapter</h2>
+    <input type="hidden" id="ch-id">
+    <div class="field"><label>Chapter Name</label><input id="ch-name" placeholder="e.g. Chapter 3: Force and Motion"></div>
+    <div class="field-row">
+      <div class="field"><label>Priority</label><select id="ch-priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+      <div class="field"><label>Difficulty</label><select id="ch-difficulty"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select></div>
+      <div class="field"><label>Manual Revision Date (optional)</label><input type="date" id="ch-revision"></div>
+    </div>
+    <div class="field"><label>Confidence: <span id="ch-confVal">3</span>/5</label><div class="slider-row"><input type="range" min="1" max="5" id="ch-confidence" oninput="document.getElementById('ch-confVal').textContent=this.value"></div></div>
+    <div class="field"><label>Next Steps</label><textarea id="ch-nextsteps" rows="2" placeholder="What do you need to study next?"></textarea></div>
+    <div class="field">
+      <label>Important Notes / Concepts</label>
+      <div style="display:flex;gap:6px;"><input id="ch-newnote" placeholder="Add a note..." style="flex:1;"><button class="btn btn-sm" onclick="addNote()">Add</button></div>
+      <div id="ch-notesList" style="margin-top:8px;"></div>
+    </div>
+    <div class="field">
+      <label>Important Questions / PYQs</label>
+      <div style="display:flex;gap:6px;"><input id="ch-newquestion" placeholder="Add a question..." style="flex:1;"><button class="btn btn-sm" onclick="addQuestion()">Add</button></div>
+      <div id="ch-questions" style="margin-top:8px;"></div>
+    </div>
+    <div class="field">
+      <label>PDF Library</label>
+      <input type="file" id="ch-pdfinput" accept="application/pdf" multiple onchange="uploadPdfs(event)">
+      <div id="ch-pdfs" style="margin-top:8px;"></div>
+    </div>
+    <div class="field">
+      <label>Resources (YouTube, Drive, websites, reference links)</label>
+      <div class="field-row">
+        <input id="ch-newresource-title" placeholder="Title, e.g. Chapter 3 one-shot" style="flex:1;">
+        <input id="ch-newresource-url" placeholder="https://..." style="flex:1;">
+        <button class="btn btn-sm" onclick="addResource()">Add</button>
+      </div>
+      <div id="ch-resources" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeChapterModal()">Close</button>
+      <button class="btn btn-primary" onclick="saveChapterMeta()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event Modal -->
+<div class="overlay" id="eventModal">
+  <div class="modal">
+    <h2>Schedule Event</h2>
+    <input type="hidden" id="ev-id">
+    <div class="field"><label>Title</label><input id="ev-title" placeholder="e.g. Math 1 - Chapter 4 revision"></div>
+    <div class="field-row">
+      <div class="field"><label>Type</label>
+        <select id="ev-type">
+          <option value="study">Study Session</option>
+          <option value="task">Task</option>
+          <option value="revision">Revision</option>
+          <option value="pomodoro">Pomodoro</option>
+          <option value="habit">Habit</option>
+          <option value="exam">Exam</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field"><label>Subject (optional)</label><select id="ev-subject"><option value="">None</option></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input type="date" id="ev-date"></div>
+      <div class="field"><label>Time (optional)</label><input type="time" id="ev-time"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Priority</label><select id="ev-priority"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+      <div class="field"><label>Repeat</label><select id="ev-repeat"><option value="none">None</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+    </div>
+    <div class="field"><label>Color</label><input type="color" id="ev-color" value="#5b8cff"></div>
+    <div class="field"><label>Notes</label><textarea id="ev-notes" rows="2"></textarea></div>
+    <div class="field"><label><input type="checkbox" id="ev-reminder" style="width:auto;" checked> Remind me on this day</label></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('eventModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEvent()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Habit Time Modal -->
+<div class="overlay" id="logHabitTimeModal">
+  <div class="modal" style="width:340px;">
+    <h2 id="logHabitTimeTitle">Log Time</h2>
+    <div class="field-row">
+      <div class="field"><label>Hours</label><input type="number" id="lht-hours" min="0" value="0"></div>
+      <div class="field"><label>Minutes</label><input type="number" id="lht-minutes" min="0" max="59" value="0"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('logHabitTimeModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHabitTimeLog()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF Viewer Modal -->
+<div class="overlay" id="pdfViewerModal" style="z-index:150;">
+  <div id="pdfViewerBox" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:90vw;height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+      <div id="pdfViewerTitle" style="font-weight:600;font-size:14px;flex:1;min-width:120px;"></div>
+      <button class="btn btn-sm" onclick="pdfZoom(-0.1)">âˆ’ Zoom</button>
+      <span id="pdfZoomLabel" class="subtle" style="min-width:40px;text-align:center;">100%</span>
+      <button class="btn btn-sm" onclick="pdfZoom(0.1)">+ Zoom</button>
+      <button class="btn btn-sm" onclick="pdfFullscreen()">â›¶ Fullscreen</button>
+      <a id="pdfOpenNewTab" class="btn btn-sm" target="_blank" rel="noopener">â†— Open in New Tab</a>
+      <a id="pdfDownloadBtn" class="btn btn-sm">â¬‡ Download</a>
+      <button class="btn btn-sm btn-danger" onclick="closeModal('pdfViewerModal')">Close</button>
+    </div>
+    <div style="flex:1;overflow:auto;background:#111;display:flex;justify-content:center;">
+      <iframe id="pdfViewerFrame" style="border:none;width:100%;height:100%;transform-origin:top center;background:#fff;"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal (replaces native confirm() which can be blocked in sandboxed previews) -->
+<div class="overlay" id="confirmModal">
+  <div class="modal" style="width:360px;">
+    <h2>Confirm</h2>
+    <p id="confirmMessage" style="font-size:13px;color:var(--text-dim);white-space:pre-line;"></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="confirmNo()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmYes()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Day Detail Modal -->
+<div class="overlay" id="dayDetailModal">
+  <div class="modal modal-wide">
+    <h2 id="dayDetailTitle">Day Detail</h2>
+    <div id="dayDetailBody"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('dayDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exam Modal -->
+<div class="overlay" id="examModal">
+  <div class="modal">
+    <h2>New Exam</h2>
+    <div class="field"><label>Subject</label><select id="ex-subject" onchange="renderExamChapterOptions()"></select></div>
+    <div class="field"><label>Exam Name</label><input id="ex-name" placeholder="e.g. Mid-term"></div>
+    <div class="field"><label>Exam Date</label><input type="date" id="ex-date"></div>
+    <div class="field"><label>Target Completion %</label><input type="number" id="ex-target" min="0" max="100" value="100"></div>
+    <div class="field"><label>Included Chapters</label><div id="ex-chapters" style="max-height:160px;overflow:auto;"></div></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('examModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExam()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/core.js"></script>
+<script src="js/tasks.js"></script>
+<script src="js/habits.js"></script>
+<script src="js/pomodoro.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/study-planner.js"></script>
+<script src="js/planning.js"></script>
+<script src="js/journal-calendar.js"></script>
+<script src="js/reports.js"></script>
+<script src="js/settings-achievements.js"></script>
+<script src="js/backup.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
